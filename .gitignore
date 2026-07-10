@@ -1,0 +1,16 @@
+
+.env
+*.env
+application-secret.properties
+node_modules/
+target/
+build/
+dist/
+
+.env
+*.env
+application-secret.properties
+node_modules/
+target/
+build/
+dist/
