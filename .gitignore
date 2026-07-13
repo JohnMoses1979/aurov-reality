@@ -14,3 +14,17 @@ node_modules/
 target/
 build/
 dist/
+
+# Local and production secrets
+.env
+**/.env
+*.env.local
+*.env.production
+auro-backend/auro/.env
+aurov-reality-portal/.env
+
+# Generated folders
+**/node_modules/
+**/dist/
+**/target/
+**/uploads/

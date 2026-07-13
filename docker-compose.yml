@@ -1,0 +1,79 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: aurov-mysql
+    restart: unless-stopped
+
+    env_file:
+      - ./auro-backend/auro/.env
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+    networks:
+      - aurov-network
+
+
+  backend:
+    build:
+      context: ./auro-backend/auro
+      dockerfile: Dockerfile
+
+    container_name: aurov-backend
+    restart: unless-stopped
+
+    env_file:
+      - ./auro-backend/auro/.env
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    volumes:
+      - uploads_data:/app/uploads
+
+    expose:
+      - "8080"
+
+    networks:
+      - aurov-network
+
+
+  frontend:
+    build:
+      context: ./aurov-reality-portal
+      dockerfile: Dockerfile
+
+    container_name: aurov-frontend
+    restart: unless-stopped
+
+    depends_on:
+      - backend
+
+    ports:
+      - "8080:80"
+
+    networks:
+      - aurov-network
+
+
+networks:
+  aurov-network:
+    driver: bridge
+
+
+volumes:
+  mysql_data:
+  uploads_data:
