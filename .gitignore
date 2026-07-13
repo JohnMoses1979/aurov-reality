@@ -41,3 +41,24 @@ _actions/
 **/node_modules/
 **/dist/
 **/target/
+
+# Environment secrets
+.env
+**/.env
+
+# Mobile/APK projects
+aurov-mobile/
+aurov-reality-portal/android/
+aurov-reality-portal/ios/
+aurov-reality-portal/capacitor.config.*
+
+# Self-hosted GitHub Actions runner
+actions-runner/
+actions-runner-*/
+**/_work/
+
+# Generated files
+**/node_modules/
+**/dist/
+**/target/
+**/uploads/
