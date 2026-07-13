@@ -28,3 +28,16 @@ aurov-reality-portal/.env
 **/dist/
 **/target/
 **/uploads/
+
+# GitHub self-hosted runner
+actions-runner/
+actions-runner-*/
+_actions/
+**/_work/
+
+# Secrets and generated files
+.env
+**/.env
+**/node_modules/
+**/dist/
+**/target/
