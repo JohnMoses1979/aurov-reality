@@ -1,0 +1,145 @@
+name: Aurov CI CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aurov-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: auro-backend/auro/pom.xml
+
+      - name: Build backend
+        working-directory: auro-backend/auro
+        run: mvn -B -DskipTests clean package
+
+      - name: Configure Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: aurov-reality-portal/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: aurov-reality-portal
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: aurov-reality-portal
+        run: npm run build
+
+  deploy:
+    name: Deploy production
+    needs: build
+
+    if: >
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main'
+
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - aurov-prod
+
+    environment: production
+    timeout-minutes: 30
+
+    steps:
+      - name: Deploy exact verified commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          cd /home/ubuntu/aurov-reality
+
+          echo "Checking required production files..."
+
+          test -f docker-compose.yml
+          test -f auro-backend/auro/.env
+          test -f aurov-reality-portal/.env
+
+          echo "Downloading commit ${GITHUB_SHA}..."
+
+          git fetch --prune origin main
+          git cat-file -e "${GITHUB_SHA}^{commit}"
+          git reset --hard "${GITHUB_SHA}"
+
+          echo "Validating Docker Compose..."
+
+          docker compose config --quiet
+
+          echo "Building production images..."
+
+          docker compose build backend frontend
+
+          echo "Starting production containers..."
+
+          docker compose up -d --remove-orphans
+
+          echo "Waiting for application..."
+
+          for attempt in $(seq 1 36); do
+            FRONTEND_OK=false
+            BACKEND_OK=false
+            MYSQL_OK=false
+
+            if curl -fsS http://127.0.0.1:8080/ >/dev/null; then
+              FRONTEND_OK=true
+            fi
+
+            if [ "$(docker inspect \
+              --format='{{.State.Status}}' \
+              aurov-backend 2>/dev/null || true)" = "running" ]; then
+              BACKEND_OK=true
+            fi
+
+            if [ "$(docker inspect \
+              --format='{{.State.Health.Status}}' \
+              aurov-mysql 2>/dev/null || true)" = "healthy" ]; then
+              MYSQL_OK=true
+            fi
+
+            if [ "$FRONTEND_OK" = true ] &&
+               [ "$BACKEND_OK" = true ] &&
+               [ "$MYSQL_OK" = true ]; then
+              echo "Deployment successful."
+              docker compose ps
+              docker image prune -f
+              exit 0
+            fi
+
+            echo "Health check ${attempt}/36..."
+            sleep 5
+          done
+
+          echo "Deployment health check failed."
+
+          docker compose ps
+          docker compose logs --tail=200
+
+          exit 1
